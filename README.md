@@ -231,6 +231,8 @@ under:
 
 partitioned by the event's own timestamp (`last_updated` / `time_fired`); the
 extension depends on the format (`.parquet`, or `.jsonl.zst` when compressed).
+Objects are sized toward ~128 MB of payload: larger flushes are split into
+several files in the same partition.
 
 | Table | Columns (core) |
 |---|---|
@@ -358,6 +360,30 @@ ORDER BY last_updated DESC;
 
 Parse the JSON attribute columns with `json_extract` / `json_extract_string`
 (DuckDB) or `json_extract_scalar` (Athena) as needed.
+
+## Development
+
+```sh
+cd home-assistant-s3-lakehouse-exporter
+pip install -r requirements-dev.txt
+ruff check .        # lint
+pytest              # unit tests (98)
+```
+
+Integration tests run against a real S3-compatible endpoint and are excluded
+by default:
+
+```sh
+docker compose up -d   # MinIO with a ready-made bucket + write-only user
+HA_EXPORTER_TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+HA_EXPORTER_TEST_S3_ACCESS_KEY=ha-exporter \
+HA_EXPORTER_TEST_S3_SECRET_KEY=<secret> \
+HA_EXPORTER_TEST_S3_BUCKET=ha-lakehouse \
+pytest -m integration
+```
+
+`scripts/profile_ingest.py` measures ingest memory and throughput; results
+and methodology are in [`docs/performance.md`](docs/performance.md).
 
 ## Minimum supported version
 

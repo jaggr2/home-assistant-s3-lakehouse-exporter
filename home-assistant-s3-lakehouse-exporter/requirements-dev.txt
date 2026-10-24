@@ -1,4 +1,5 @@
 # Development / CI dependencies.
 -r requirements.txt
+psutil==7.2.2
 pytest==9.1.1
 ruff==0.17.2
