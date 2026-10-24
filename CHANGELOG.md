@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-24
+
+### Fixed
+
+- Release images are now tagged with the plain version (`0.1.2`) in addition
+  to the git-tag form (`v0.1.2`). The Supervisor resolves
+  `image:<config.yaml version>`, so the previous `v`-only tags made add-on
+  installs fail with `manifest unknown`. The `vX.Y.Z` tags remain as aliases.
+
 ## [0.1.1] - 2026-10-24
 
 ### Added
