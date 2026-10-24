@@ -1,4 +1,4 @@
-"""Integration tests against a real S3-compatible endpoint (MinIO et al.).
+"""Integration tests against a real S3-compatible endpoint.
 
 These are **not** run by default (see ``addopts`` in ``pyproject.toml``) and
 are not part of CI. Start the bundled stack first:
@@ -7,9 +7,9 @@ are not part of CI. Start the bundled stack first:
 
 then run with connection settings from the environment:
 
-    HA_EXPORTER_TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+    HA_EXPORTER_TEST_S3_ENDPOINT=http://127.0.0.1:8333 \
     HA_EXPORTER_TEST_S3_ACCESS_KEY=ha-exporter \
-    HA_EXPORTER_TEST_S3_SECRET_KEY=<secret> \
+    HA_EXPORTER_TEST_S3_SECRET_KEY=ha-exporter-secret-change-me \
     HA_EXPORTER_TEST_S3_BUCKET=ha-lakehouse \
     pytest -m integration
 """
@@ -17,10 +17,10 @@ then run with connection settings from the environment:
 from __future__ import annotations
 
 import asyncio
-import gzip
 import io
 import json
 import os
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
@@ -45,14 +45,16 @@ def _options(**format_overrides):
     return make_options(
         s3={
             "bucket": os.environ.get("HA_EXPORTER_TEST_S3_BUCKET", "ha-lakehouse"),
-            "prefix": f"it-{uuid4().hex[:8]}",
+            "prefix": f"home-assistant/it-{uuid4().hex[:8]}",
             "region": "us-east-1",
             "endpoint_url": os.environ["HA_EXPORTER_TEST_S3_ENDPOINT"],
             "path_style": True,
         },
         auth={
             "access_key_id": os.environ.get("HA_EXPORTER_TEST_S3_ACCESS_KEY", "ha-exporter"),
-            "secret_access_key": os.environ.get("HA_EXPORTER_TEST_S3_SECRET_KEY", "test-secret"),
+            "secret_access_key": os.environ.get(
+                "HA_EXPORTER_TEST_S3_SECRET_KEY", "ha-exporter-secret-change-me"
+            ),
         },
         format={"type": "parquet", "compression": "zstd", **format_overrides},
     )
@@ -76,11 +78,12 @@ def _get(options, key: str) -> bytes:
 
 
 def _rows(count: int):
+    base = ts(2026, 10, 24, 12)
     return make_rows(
         [
             (
                 "state_changes",
-                ts(2026, 10, 24, 12, minute),
+                base + timedelta(minutes=minute),
                 {
                     "entity_id": f"sensor.it_{minute}",
                     "state": str(minute),
@@ -129,7 +132,10 @@ def test_parquet_writer_against_s3() -> None:
     results = writer.write_batch(_rows(10))
     assert len(results) == 1
 
-    raw = gzip.decompress(_get(options, results[0].key))
+    # note: format.compression for parquet is the *column-chunk* codec; the
+    # object stays a Parquet file (magic "PAR1"), not a gzip stream
+    raw = _get(options, results[0].key)
+    assert raw[:4] == b"PAR1"
     table = pq.read_table(io.BytesIO(raw))
     assert table.num_rows == 10
     assert "entity_id" in table.schema.names
