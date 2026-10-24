@@ -1,0 +1,19 @@
+# Normalize every text file to LF on checkout and commit (Windows dev machine).
+* text=auto eol=lf
+
+# Shell scripts must stay LF.
+*.sh text eol=lf
+
+# Binary assets: leave untouched.
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.ico -text
+*.pdf -text
+*.zip -text
+*.gz -text
+*.tgz -text
+*.zst -text
+*.whl -text
