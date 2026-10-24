@@ -1,0 +1,86 @@
+# Local integration convenience for the Home Assistant S3 Lakehouse Exporter.
+# NOT used by CI. Starts a single-node MinIO with a `ha-lakehouse` bucket and a
+# dedicated write-only user for the exporter — a realistic stand-in for
+# production S3 / R2 / Garage.
+#
+#   docker compose up
+#
+# Console:   http://localhost:9001  (MINIO_ROOT_USER / MINIO_ROOT_PASSWORD)
+# S3 API:    http://localhost:9000
+#
+# Then point the add-on config at it:
+#
+#   s3:
+#     bucket: "ha-lakehouse"
+#     prefix: "home-assistant"
+#     endpoint_url: "http://<host>:9000"   # from the add-on's point of view
+#     path_style: true
+#   auth:
+#     access_key_id: "ha-exporter"
+#     secret_access_key: "ha-exporter-secret-change-me"
+#   format:
+#     type: "parquet"                      # or "jsonl" — no catalog needed
+#
+# NOTE: if the add-on runs on the same Docker network, use
+# http://minio:9000 as the endpoint; otherwise use the host's address.
+
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+
+  # One-shot setup: bucket + dedicated write-only user on the
+  # home-assistant/ prefix (same least-privilege shape as the README recipe).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      EXPORTER_ACCESS_KEY: ${EXPORTER_ACCESS_KEY:-ha-exporter}
+      EXPORTER_SECRET_KEY: ${EXPORTER_SECRET_KEY:-ha-exporter-secret-change-me}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do
+          echo "waiting for minio..."
+          sleep 1
+        done
+        mc mb --ignore-existing local/ha-lakehouse
+        mc admin user add local "$$EXPORTER_ACCESS_KEY" "$$EXPORTER_SECRET_KEY"
+        cat > /tmp/ha-exporter-policy.json <<'EOF'
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+              "Resource": "arn:aws:s3:::ha-lakehouse/home-assistant/*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": "s3:ListBucket",
+              "Resource": "arn:aws:s3:::ha-lakehouse",
+              "Condition": {
+                "StringLike": { "s3:prefix": "home-assistant/*" }
+              }
+            }
+          ]
+        }
+        EOF
+        mc admin policy create local ha-exporter-write /tmp/ha-exporter-policy.json
+        mc admin policy attach local ha-exporter-write --user "$$EXPORTER_ACCESS_KEY"
+        echo "Ready: bucket ha-lakehouse, user $$EXPORTER_ACCESS_KEY (write-only on home-assistant/)"
+
+volumes:
+  minio-data:

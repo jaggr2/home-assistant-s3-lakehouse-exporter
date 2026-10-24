@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/jaggr2/home-assistant-s3-lakehouse-exporter
+
+jobs:
+  # Lint + unit tests. Kept light; release-time version/changelog checks live
+  # in the release job only.
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: home-assistant-s3-lakehouse-exporter/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r home-assistant-s3-lakehouse-exporter/requirements-dev.txt
+      - name: Ruff
+        run: ruff check .
+        working-directory: home-assistant-s3-lakehouse-exporter
+      - name: Pytest
+        run: pytest
+        working-directory: home-assistant-s3-lakehouse-exporter
+
+  # PR-only image build (no push). The build args must carry a per-arch base
+  # image, so each platform is built in its own matrix leg.
+  docker:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            base: ghcr.io/home-assistant/amd64-base:3.20
+          - arch: aarch64
+            platform: linux/arm64
+            base: ghcr.io/home-assistant/aarch64-base:3.20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (${{ matrix.platform }})
+        uses: docker/build-push-action@v6
+        with:
+          context: home-assistant-s3-lakehouse-exporter
+          platforms: ${{ matrix.platform }}
+          push: false
+          build-args: |
+            BUILD_FROM=${{ matrix.base }}
+          tags: home-assistant-s3-lakehouse-exporter:ci-${{ matrix.arch }}
+
+  # Tagged releases: verify the tag against config.yaml and CHANGELOG.md, then
+  # build and push per-arch images. A separate job assembles the single
+  # multi-arch manifest that config.yaml's image: reference expects.
+  #
+  # Fallback (see AGENTS.md): if the Supervisor cannot pull a manifest list,
+  # push per-arch tags instead — ghcr.io/jaggr2/{arch}-home-assistant-s3-lakehouse-exporter
+  # — and switch config.yaml's image: to the {arch} placeholder form.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: lint-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            base: ghcr.io/home-assistant/amd64-base:3.20
+          - arch: aarch64
+            platform: linux/arm64
+            base: ghcr.io/home-assistant/aarch64-base:3.20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify tag matches config.yaml version
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -E '^version:' home-assistant-s3-lakehouse-exporter/config.yaml | head -n1 | sed -E 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/')"
+          echo "config.yaml version: ${VERSION}"
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Could not read version from home-assistant-s3-lakehouse-exporter/config.yaml"
+            exit 1
+          fi
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match config.yaml version v${VERSION}. Bump config.yaml before tagging."
+            exit 1
+          fi
+
+      - name: Verify CHANGELOG.md documents this version
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -E '^version:' home-assistant-s3-lakehouse-exporter/config.yaml | head -n1 | sed -E 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/')"
+          if ! grep -qE "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${VERSION}]' heading. A release requires a config.yaml version bump and a CHANGELOG entry."
+            exit 1
+          fi
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push (${{ matrix.platform }})
+        uses: docker/build-push-action@v6
+        with:
+          context: home-assistant-s3-lakehouse-exporter
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+            BUILD_FROM=${{ matrix.base }}
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}-${{ matrix.arch }}
+
+  # Assemble the single multi-arch manifest referenced by config.yaml (no
+  # {arch} placeholder), tagged :vX.Y.Z and :latest. The per-arch images from
+  # the release job remain available as :vX.Y.Z-<arch> and double as the
+  # documented fallback if the Supervisor rejects manifest lists.
+  release-manifest:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Create multi-arch manifest
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "${IMAGE}:${GITHUB_REF_NAME}" \
+            -t "${IMAGE}:latest" \
+            "${IMAGE}:${GITHUB_REF_NAME}-amd64" \
+            "${IMAGE}:${GITHUB_REF_NAME}-aarch64"

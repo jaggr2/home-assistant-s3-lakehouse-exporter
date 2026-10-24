@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": [
+    "dockerfile",
+    "docker-compose",
+    "github-actions",
+    "pep621",
+    "pip_requirements"
+  ],
+  "packageRules": [
+    {
+      "description": "Pin Docker base images to digests",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "pinDigests": true
+    },
+    {
+      "description": "Group patch updates into a single PR",
+      "matchUpdateTypes": ["patch"],
+      "groupName": "patch updates"
+    }
+  ]
+}
