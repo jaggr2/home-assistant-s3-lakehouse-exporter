@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+# Home Assistant S3 Lakehouse Exporter service.
+cd /app || exit 1
+exec python3 -m exporter

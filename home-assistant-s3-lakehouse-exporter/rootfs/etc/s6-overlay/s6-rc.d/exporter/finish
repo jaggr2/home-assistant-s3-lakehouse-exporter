@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bashio
+# Called when the exporter process exits. A clean exit (add-on stop) is
+# normal; an unexpected exit stops the whole container so the Supervisor
+# surfaces the failure instead of silently restarting in a loop.
+bashio::log.info "exporter service exited (code=${1}, signal=${2})"
+if [ "${1}" -ne 0 ] || [ "${2}" -ne 0 ]; then
+    bashio::log.warning "unexpected exit, stopping the add-on"
+    s6-svscanctl -t /run/service
+fi

@@ -1,0 +1,9 @@
+build_from:
+  aarch64: ghcr.io/home-assistant/aarch64-base:3.20
+  amd64: ghcr.io/home-assistant/amd64-base:3.20
+
+labels:
+  org.opencontainers.image.title: Home Assistant S3 Lakehouse Exporter
+  org.opencontainers.image.description: Export Home Assistant history to S3-compatible storage as Apache Iceberg, Parquet or JSONL
+  org.opencontainers.image.source: https://github.com/jaggr2/home-assistant-s3-lakehouse-exporter
+  org.opencontainers.image.licenses: MIT
