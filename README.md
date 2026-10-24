@@ -184,6 +184,12 @@ objects (and nothing more):
 
 ### MinIO recipe
 
+> **Note (2026):** MinIO Community Edition is archived and its container
+> images are no longer publicly distributed (removed from Docker Hub in
+> September 2026; `quay.io/minio/*` now requires a login). If you already run
+> MinIO, the recipe below still applies unchanged — the exporter speaks plain
+> S3 and works the same against any MinIO-compatible server.
+
 ```sh
 # 1. Create a dedicated user (do not use the root credentials).
 mc admin user add myminio ha-exporter 'CHOOSE-A-SECRET'
@@ -217,8 +223,9 @@ Then point the add-on at it: `s3.endpoint_url` = your MinIO URL,
 `s3.path_style: true`, `s3.bucket: ha-lakehouse`,
 `auth.access_key_id` / `auth.secret_access_key` = the user you created.
 
-A ready-to-run local MinIO setup (bucket + write-only user included) is
-provided via `docker-compose.yml` at the root of this repository.
+A ready-to-run local S3 stack (SeaweedFS, with a bucket and a scoped
+`ha-exporter` identity included) is provided via `docker-compose.yml` at the
+root of this repository.
 
 ## Data model
 
@@ -374,10 +381,10 @@ Integration tests run against a real S3-compatible endpoint and are excluded
 by default:
 
 ```sh
-docker compose up -d   # MinIO with a ready-made bucket + write-only user
-HA_EXPORTER_TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+docker compose up -d   # SeaweedFS with a ready-made bucket + scoped user
+HA_EXPORTER_TEST_S3_ENDPOINT=http://127.0.0.1:8333 \
 HA_EXPORTER_TEST_S3_ACCESS_KEY=ha-exporter \
-HA_EXPORTER_TEST_S3_SECRET_KEY=<secret> \
+HA_EXPORTER_TEST_S3_SECRET_KEY=ha-exporter-secret-change-me \
 HA_EXPORTER_TEST_S3_BUCKET=ha-lakehouse \
 pytest -m integration
 ```

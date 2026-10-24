@@ -1,0 +1,19 @@
+{
+  "identities": [
+    {
+      "name": "ha-exporter",
+      "credentials": [
+        {
+          "accessKey": "ha-exporter",
+          "secretKey": "ha-exporter-secret-change-me"
+        }
+      ],
+      "actions": [
+        "Read:ha-lakehouse",
+        "Write:ha-lakehouse",
+        "List:ha-lakehouse",
+        "Tagging:ha-lakehouse"
+      ]
+    }
+  ]
+}

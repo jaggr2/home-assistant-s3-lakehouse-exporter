@@ -147,8 +147,9 @@ CHANGELOG.md
   validation/normalization (including defaults and `str?` optionals),
   attribute filtering modes, gap-detection logic (mocked WebSocket), and each
   writer's schema-stability guarantees (extra column → additive only).
-- An optional local `docker-compose.yml` with MinIO for integration runs is
-  welcome (not CI-blocking).
+- An optional local `docker-compose.yml` with an S3-compatible server
+  (SeaweedFS — MinIO images are no longer publicly distributed) for
+  integration runs is welcome (not CI-blocking).
 
 ## 9. Suggested build order
 
