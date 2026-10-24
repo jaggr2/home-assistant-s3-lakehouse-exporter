@@ -1,7 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q -m 'not integration'"
+markers = [
+    "integration: needs a running S3-compatible endpoint (MinIO); run with -m integration",
+]
 
 [tool.ruff]
 line-length = 100
