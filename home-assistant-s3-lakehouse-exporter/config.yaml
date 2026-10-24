@@ -1,5 +1,5 @@
 name: Home Assistant S3 Lakehouse Exporter
-version: "0.1.2"
+version: "0.1.3"
 slug: home_assistant_s3_lakehouse_exporter
 description: Export Home Assistant history to S3-compatible storage as Apache Iceberg, Parquet, or JSONL
 url: https://github.com/jaggr2/home-assistant-s3-lakehouse-exporter

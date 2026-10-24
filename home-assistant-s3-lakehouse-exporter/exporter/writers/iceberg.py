@@ -109,7 +109,20 @@ class IcebergWriter(BatchWriter):
 
         self._catalog = load_catalog("home_assistant", **catalog_properties(options))
         self._namespace = options.format.database or NAMESPACE
-        self._catalog.create_namespace_if_not_exists(self._namespace)
+        try:
+            self._catalog.create_namespace_if_not_exists(self._namespace)
+        except Exception as err:
+            # Least-privilege setups deny CreateDatabase on purpose (the
+            # documented IAM policy omits it). Creating the namespace fails
+            # even when it already exists — table creation below surfaces a
+            # real "namespace missing" error if that is actually the case.
+            LOGGER.warning(
+                "could not create namespace %s (%s: %s); continuing on the "
+                "assumption it already exists",
+                self._namespace,
+                type(err).__name__,
+                err,
+            )
         self._tables: dict[str, Any] = {}
         self._table_columns: dict[str, list[Column]] = {}
         self._lock = threading.Lock()

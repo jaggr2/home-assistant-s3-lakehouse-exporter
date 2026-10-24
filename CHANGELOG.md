@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-24
+
+### Fixed
+
+- Namespace creation is now best-effort: least-privilege policies that omit
+  `glue:CreateDatabase` (as documented in `docs/glue-athena.md`) no longer
+  crash startup when the target database already exists. A missing database
+  still surfaces as a clear table-creation error.
+
 ## [0.1.2] - 2026-10-24
 
 ### Fixed
