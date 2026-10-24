@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-24
+
+### Fixed
+
+- Backfill works on Home Assistant versions whose history REST API requires
+  `filter_entity_id` (it used to answer `400 filter_entity_id is missing`).
+  The exporter now resolves concrete entity ids from `/api/states` and sends
+  them in chunks of 100.
+- Registry snapshots use the correct `config/area_registry/list` WebSocket
+  command (`config/area/list` is not a command, area snapshots always failed).
+
 ## [0.1.3] - 2026-10-24
 
 ### Fixed

@@ -104,7 +104,7 @@ def test_registry_service_snapshots_all_registries(tmp_path) -> None:
         {
             "config/entity_registry/list": ENTITIES,
             "config/device_registry/list": DEVICES,
-            "config/area/list": AREAS,
+            "config/area_registry/list": AREAS,
         }
     )
     service = RegistryService(make_options(), spool, client, now=lambda: SNAPSHOT_AT)
@@ -113,7 +113,7 @@ def test_registry_service_snapshots_all_registries(tmp_path) -> None:
     assert client.commands == [
         "config/entity_registry/list",
         "config/device_registry/list",
-        "config/area/list",
+        "config/area_registry/list",
     ]
     kinds = {row.kind for row in spool.fetch(10)}
     assert kinds == {"registry_entities", "registry_devices", "registry_areas"}

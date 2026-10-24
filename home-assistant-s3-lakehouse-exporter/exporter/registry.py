@@ -27,7 +27,7 @@ SNAPSHOT_INTERVAL = timedelta(days=1)
 REGISTRY_COMMANDS = {
     "registry_entities": "config/entity_registry/list",
     "registry_devices": "config/device_registry/list",
-    "registry_areas": "config/area/list",
+    "registry_areas": "config/area_registry/list",
 }
 
 

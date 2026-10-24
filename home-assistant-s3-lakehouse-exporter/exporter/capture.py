@@ -28,6 +28,9 @@ from exporter.spool import Spool, iso, parse_iso
 
 LOGGER = logging.getLogger(__name__)
 
+#: Max entity ids per history request (keeps request URLs comfortably short).
+FILTER_CHUNK = 100
+
 DEFAULT_HTTP_URL = "http://supervisor/core"
 DEFAULT_WS_URL = "ws://supervisor/core/websocket"
 
@@ -326,11 +329,30 @@ class HomeAssistantClient:
             "minimal_response": "0",
             "no_attributes": "0" if include_attributes else "1",
         }
-        if entity_ids:
-            params["filter_entity_id"] = ",".join(entity_ids)
         path = f"/api/history/period/{iso(start)}"
-        data = await self.get_json(path, params)
-        return data if isinstance(data, list) else []
+        # Recent Home Assistant versions reject history requests without an
+        # explicit filter ("filter_entity_id is missing"), so always resolve a
+        # concrete entity list and chunk it to keep URLs short. Row-level
+        # EntityFilter application is unchanged downstream.
+        resolved = list(entity_ids) if entity_ids is not None else await self._all_entity_ids()
+        if not resolved:
+            return []
+        history: list[list[dict]] = []
+        for offset in range(0, len(resolved), FILTER_CHUNK):
+            params["filter_entity_id"] = ",".join(resolved[offset : offset + FILTER_CHUNK])
+            data = await self.get_json(path, params)
+            if isinstance(data, list):
+                history.extend(data)
+        return history
+
+    async def _all_entity_ids(self) -> list[str]:
+        """All entity ids currently known to Home Assistant."""
+        states = await self.get_json("/api/states")
+        return [
+            state["entity_id"]
+            for state in states or []
+            if isinstance(state, dict) and state.get("entity_id")
+        ]
 
     async def ws_request(self, command: str, payload: dict | None = None) -> Any:
         """Open a short-lived WebSocket session and run one command."""
