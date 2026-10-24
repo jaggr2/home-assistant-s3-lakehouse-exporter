@@ -33,6 +33,17 @@ jobs:
       - name: Pytest
         run: pytest
         working-directory: home-assistant-s3-lakehouse-exporter
+      - name: Check version consistency
+        working-directory: home-assistant-s3-lakehouse-exporter
+        run: |
+          set -euo pipefail
+          CONFIG_VERSION="$(grep -E '^version:' config.yaml | head -n1 | sed -E 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/')"
+          CODE_VERSION="$(grep -E '__version__ =' exporter/__init__.py | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "config.yaml version: ${CONFIG_VERSION} / package __version__: ${CODE_VERSION}"
+          if [ "${CONFIG_VERSION}" != "${CODE_VERSION}" ]; then
+            echo "::error::config.yaml version and exporter/__init__.py __version__ must match"
+            exit 1
+          fi
 
   # Runs the S3 integration suite against a SeaweedFS service container. The
   # same suite is opt-in locally (pytest -m integration, see docker-compose.yml).
@@ -133,9 +144,14 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(grep -E '^version:' home-assistant-s3-lakehouse-exporter/config.yaml | head -n1 | sed -E 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/')"
-          echo "config.yaml version: ${VERSION}"
+          CODE_VERSION="$(grep -E '__version__ =' home-assistant-s3-lakehouse-exporter/exporter/__init__.py | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "config.yaml version: ${VERSION} / package __version__: ${CODE_VERSION}"
           if [ -z "${VERSION}" ]; then
             echo "::error::Could not read version from home-assistant-s3-lakehouse-exporter/config.yaml"
+            exit 1
+          fi
+          if [ "${VERSION}" != "${CODE_VERSION}" ]; then
+            echo "::error::config.yaml version and exporter/__init__.py __version__ must match"
             exit 1
           fi
           if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then

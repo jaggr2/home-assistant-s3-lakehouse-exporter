@@ -26,7 +26,9 @@ Versioning follows [SemVer](https://semver.org/):
       S3 suite against a SeaweedFS service container), and the `docker`
       image-build job for both arches.
 - [ ] `CHANGELOG.md` has a `## [X.Y.Z]` entry describing user-visible changes.
-- [ ] `home-assistant-s3-lakehouse-exporter/config.yaml` `version:` is `X.Y.Z`.
+- [ ] `home-assistant-s3-lakehouse-exporter/config.yaml` `version:` is `X.Y.Z`
+      **and** `exporter/__init__.py` `__version__` is `X.Y.Z` (CI enforces both
+      on every run and on the release job).
 - [ ] README matches shipped behavior (config reference, IAM policy, health
       output, querying examples).
 - [ ] All dependencies pinned in `requirements.txt` / `requirements-dev.txt`.
