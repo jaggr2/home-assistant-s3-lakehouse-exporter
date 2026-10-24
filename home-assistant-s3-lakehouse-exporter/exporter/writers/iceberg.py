@@ -215,7 +215,10 @@ def catalog_properties(options: Any) -> dict[str, str]:
         props["uri"] = fmt.catalog_uri
     if fmt.warehouse:
         props["warehouse"] = fmt.warehouse
-    elif fmt.catalog in ("hive", "nessie", "sql"):
+    else:
+        # Every catalog needs a default warehouse: pyiceberg resolves table
+        # locations from it when create_table gets no explicit location
+        # ("No default path is set..." otherwise). This includes glue.
         props["warehouse"] = f"s3://{options.s3.bucket}/{options.s3.prefix}".rstrip("/")
 
     # Credentials and region for the Glue client and the S3 FileIO. Values are
