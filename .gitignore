@@ -12,3 +12,4 @@ build/
 data/
 *.sqlite
 *.sqlite3
+uv.lock
