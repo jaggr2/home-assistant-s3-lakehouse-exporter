@@ -1,0 +1,87 @@
+name: Home Assistant S3 Lakehouse Exporter
+version: "0.1.0"
+slug: home_assistant_s3_lakehouse_exporter
+description: Export Home Assistant history to S3-compatible storage as Apache Iceberg, Parquet, or JSONL
+url: https://github.com/jaggr2/home-assistant-s3-lakehouse-exporter
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+watchdog: http://[HOST]:[PORT:8099]/health
+homeassistant_api: true
+image: "ghcr.io/jaggr2/home-assistant-s3-lakehouse-exporter"
+
+options:
+  s3:
+    bucket: ""
+    prefix: "home-assistant"
+    region: "eu-central-1"
+    endpoint_url: ""
+    path_style: false
+    storage_class: "STANDARD"
+  auth:
+    access_key_id: ""
+    secret_access_key: ""
+    session_token: ""
+  capture:
+    include_entities: []
+    exclude_entities: []
+    include_domains: []
+    exclude_domains: []
+    events:
+      - state_changed
+    registries: true
+    attributes: "all"
+    attribute_allowlist: []
+    backfill_days: 30
+    flush_interval_seconds: 300
+    max_batch_rows: 20000
+  format:
+    type: "iceberg"
+    catalog: "glue"
+    catalog_uri: ""
+    warehouse: ""
+    table_prefix: "ha_"
+    compression: "zstd"
+  runtime:
+    spool_max_mb: 256
+    log_level: "info"
+    notify_webhook: ""
+
+schema:
+  s3:
+    bucket: str
+    prefix: str
+    region: str
+    endpoint_url: str?
+    path_style: bool
+    storage_class: list(REDUCED_REDUNDANCY|STANDARD|STANDARD_IA|INTELLIGENT_TIERING|ONEZONE_IA)?
+  auth:
+    access_key_id: str?
+    secret_access_key: password?
+    session_token: password?
+  capture:
+    include_entities: [str]
+    exclude_entities: [str]
+    include_domains: [str]
+    exclude_domains: [str]
+    events: [str]
+    registries: bool
+    attributes: list(all|minimal|allowlist)?
+    attribute_allowlist: [str]
+    backfill_days: int
+    flush_interval_seconds: int
+    max_batch_rows: int
+  format:
+    type: list(iceberg|parquet|jsonl)
+    catalog: list(glue|rest|nessie|hive|sql)?
+    catalog_uri: str?
+    warehouse: str?
+    table_prefix: str
+    compression: list(zstd|snappy|gzip|none)?
+  runtime:
+    spool_max_mb: int
+    log_level: list(debug|info|warning|error)?
+    notify_webhook: str?
