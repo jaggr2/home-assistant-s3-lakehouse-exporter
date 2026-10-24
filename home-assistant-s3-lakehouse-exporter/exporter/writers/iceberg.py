@@ -124,26 +124,31 @@ class IcebergWriter(BatchWriter):
         results: list[WriteResult] = []
         for (kind, _day), group in self.partition_rows(rows).items():
             with self._lock:
-                columns = self._columns_for(kind, group)
-                table = self._table_for(kind, columns)
+                self._columns_for(kind, group)
+                table = self._table_for(kind, self._table_columns[kind])
                 columns = self._table_columns[kind]
-                arrow = pa.Table.from_pydict(
-                    column_values(columns, group),
-                    schema=arrow_schema_for(columns),
-                )
-                try:
-                    table.append(arrow)
-                except Exception as err:
-                    raise WriteError(f"iceberg append to {self.table_name(kind)} failed: {err}") from err
-            LOGGER.debug("committed %d rows to iceberg table %s", len(group), self.table_name(kind))
-            results.append(
-                WriteResult(
-                    key=self.table_name(kind),
-                    table=self.table_name(kind),
-                    rows=len(group),
-                    size=arrow.nbytes,
-                )
-            )
+                for chunk in self.split_by_size(group):
+                    arrow = pa.Table.from_pydict(
+                        column_values(columns, chunk),
+                        schema=arrow_schema_for(columns),
+                    )
+                    try:
+                        table.append(arrow)
+                    except Exception as err:
+                        raise WriteError(
+                            f"iceberg append to {self.table_name(kind)} failed: {err}"
+                        ) from err
+                    LOGGER.debug(
+                        "committed %d rows to iceberg table %s", len(chunk), self.table_name(kind)
+                    )
+                    results.append(
+                        WriteResult(
+                            key=self.table_name(kind),
+                            table=self.table_name(kind),
+                            rows=len(chunk),
+                            size=arrow.nbytes,
+                        )
+                    )
         return results
 
     # -- internals --------------------------------------------------------

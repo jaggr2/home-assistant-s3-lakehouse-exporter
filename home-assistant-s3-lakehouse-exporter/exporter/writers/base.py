@@ -29,6 +29,17 @@ class WriteError(RuntimeError):
     """Raised when a batch could not be written to storage."""
 
 
+#: Uncompressed payload budget per data file. Objects land around this size
+#: (compressed codecs shrink it further); sized for lakehouse engines that
+#: prefer ~128 MB files over many tiny ones.
+TARGET_OBJECT_BYTES = 128 * 1024 * 1024
+
+
+def estimate_row_bytes(row: SpoolRow) -> int:
+    """Cheap payload size estimate without re-serialising the row."""
+    return 32 + sum(len(str(value)) if value is not None else 0 for value in row.payload.values())
+
+
 @dataclass(frozen=True, slots=True)
 class Column:
     """Logical column. ``type`` is one of ``string``, ``timestamp``, ``bool``, ``json``.
@@ -151,6 +162,28 @@ class BatchWriter:
 
     def write_batch(self, rows: Sequence[SpoolRow]) -> list[WriteResult]:
         raise NotImplementedError
+
+    # -- sizing -----------------------------------------------------------
+
+    def split_by_size(self, rows: Sequence[SpoolRow]) -> list[list[SpoolRow]]:
+        """Split rows into chunks of at most ``TARGET_OBJECT_BYTES`` payload.
+
+        Keeps data files near the target size even when a flush carries more
+        payload than that (a single oversized row becomes its own object).
+        """
+        chunks: list[list[SpoolRow]] = []
+        current: list[SpoolRow] = []
+        current_bytes = 0
+        for row in rows:
+            row_bytes = estimate_row_bytes(row)
+            if current and current_bytes + row_bytes > TARGET_OBJECT_BYTES:
+                chunks.append(current)
+                current, current_bytes = [], 0
+            current.append(row)
+            current_bytes += row_bytes
+        if current:
+            chunks.append(current)
+        return chunks
 
     # -- schema -----------------------------------------------------------
 

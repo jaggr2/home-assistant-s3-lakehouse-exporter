@@ -42,16 +42,17 @@ class JsonlWriter(BatchWriter):
         extension = _EXTENSIONS[compression]
         results: list[WriteResult] = []
         for (kind, day), group in self.partition_rows(rows).items():
-            body = "".join(
-                json.dumps(_normalise(row.payload), separators=(",", ":"), default=str) + "\n"
-                for row in group
-            ).encode("utf-8")
-            body = _compress(body, compression)
-            key = self.object_key(kind, day, extension)
-            self.store.put_object(key, body, _CONTENT_TYPES[compression])
-            results.append(
-                WriteResult(key=key, table=self.table_name(kind), rows=len(group), size=len(body))
-            )
+            for chunk in self.split_by_size(group):
+                body = "".join(
+                    json.dumps(_normalise(row.payload), separators=(",", ":"), default=str) + "\n"
+                    for row in chunk
+                ).encode("utf-8")
+                body = _compress(body, compression)
+                key = self.object_key(kind, day, extension)
+                self.store.put_object(key, body, _CONTENT_TYPES[compression])
+                results.append(
+                    WriteResult(key=key, table=self.table_name(kind), rows=len(chunk), size=len(body))
+                )
         return results
 
 

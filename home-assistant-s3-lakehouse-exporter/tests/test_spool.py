@@ -91,8 +91,18 @@ def test_total_bytes_accounting(tmp_path) -> None:
     assert one > 0
     spool.add("events", ts(2026, 10, 24, 12, 1), {"b": 2})
     assert spool.total_bytes() > one
+    assert spool.stats() == (2, spool.total_bytes())
     spool.drop([1, 2])
-    assert spool.total_bytes() == 0
+    assert spool.stats() == (0, 0)
+    spool.close()
+
+
+def test_iter_fetch_streams_in_pages(tmp_path) -> None:
+    spool = Spool(tmp_path / "spool.db", max_bytes=1024 * 1024)
+    spool.add_many([("events", ts(2026, 10, 24, 12), {"n": n}) for n in range(25)])
+    streamed = list(spool.iter_fetch(10, chunk_size=3))
+    assert [row.payload["n"] for row in streamed] == list(range(10))
+    assert spool.fetch(10) == streamed  # same rows as the buffered fetch
     spool.close()
 
 

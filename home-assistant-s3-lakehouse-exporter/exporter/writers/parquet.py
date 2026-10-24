@@ -47,20 +47,23 @@ class ParquetWriter(BatchWriter):
         results: list[WriteResult] = []
         for (kind, day), group in self.partition_rows(rows).items():
             columns = self.columns_for(kind, group)
-            table = pa.Table.from_pydict(column_values(columns, group), schema=arrow_schema_for(columns))
-            buffer = io.BytesIO()
-            pq.write_table(
-                table,
-                buffer,
-                compression=compression,
-                use_dictionary=True,
-                write_statistics=True,
-            )
-            body = buffer.getvalue()
-            key = self.object_key(kind, day, _EXTENSIONS["zstd"])
-            self.store.put_object(key, body, "application/vnd.apache.parquet")
-            LOGGER.debug("wrote %s (%d rows, %d bytes)", key, len(group), len(body))
-            results.append(
-                WriteResult(key=key, table=self.table_name(kind), rows=len(group), size=len(body))
-            )
+            for chunk in self.split_by_size(group):
+                table = pa.Table.from_pydict(
+                    column_values(columns, chunk), schema=arrow_schema_for(columns)
+                )
+                buffer = io.BytesIO()
+                pq.write_table(
+                    table,
+                    buffer,
+                    compression=compression,
+                    use_dictionary=True,
+                    write_statistics=True,
+                )
+                body = buffer.getvalue()
+                key = self.object_key(kind, day, _EXTENSIONS["zstd"])
+                self.store.put_object(key, body, "application/vnd.apache.parquet")
+                LOGGER.debug("wrote %s (%d rows, %d bytes)", key, len(chunk), len(body))
+                results.append(
+                    WriteResult(key=key, table=self.table_name(kind), rows=len(chunk), size=len(body))
+                )
         return results

@@ -127,6 +127,37 @@ def test_parquet_schema_stability_adds_extra_columns() -> None:
     assert "old_state" in table.schema.names  # declared columns never disappear
 
 
+def test_split_by_size_targets_object_size(monkeypatch) -> None:
+    monkeypatch.setattr("exporter.writers.base.TARGET_OBJECT_BYTES", 500)
+    writer = JsonlWriter(FakeStore(), make_options(format={"type": "jsonl", "compression": "none"}))
+    rows = make_rows(
+        [("state_changes", ts(2026, 10, 24, 12, minute), {"pad": "x" * 100}) for minute in range(20)]
+    )
+    chunks = writer.split_by_size(rows)
+    assert len(chunks) > 1  # 20 rows x ~132 bytes exceeds the 500-byte target
+    assert [len(chunk) for chunk in chunks][:-1] == [3] * (len(chunks) - 1)
+    assert sum(len(chunk) for chunk in chunks) == 20
+
+    # a single oversized row still becomes exactly one object
+    big = make_rows([("state_changes", ts(2026, 10, 24, 12), {"pad": "y" * 5000})])
+    assert [[row.id for row in chunk] for chunk in writer.split_by_size(big)] == [[1]]
+
+
+def test_jsonl_objects_split_per_target_size(monkeypatch) -> None:
+    monkeypatch.setattr("exporter.writers.base.TARGET_OBJECT_BYTES", 500)
+    store = FakeStore()
+    writer = JsonlWriter(store, make_options(format={"type": "jsonl", "compression": "none"}))
+    rows = make_rows(
+        [("state_changes", ts(2026, 10, 24, 12, minute), {"pad": "x" * 100}) for minute in range(20)]
+    )
+    results = writer.write_batch(rows)
+    assert len(results) > 1  # one object per size chunk, all in the same partition
+    assert sum(result.rows for result in results) == 20
+    assert {result.key.rsplit("/part-", 1)[0] for result in results} == {
+        "home-assistant/ha_state_changes/year=2026/month=10/day=24"
+    }
+
+
 def test_writers_tolerate_missing_and_null_values() -> None:
     store = FakeStore()
     parquet = ParquetWriter(store, make_options(format={"type": "parquet", "compression": "zstd"}))

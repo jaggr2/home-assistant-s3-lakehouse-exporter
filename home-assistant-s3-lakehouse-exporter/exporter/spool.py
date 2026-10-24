@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS meta (
 #: we do not drop rows on every single insert after the first overflow.
 _CAP_RELEASE_FACTOR = 0.9
 
+#: Rows per page when scanning for drop candidates.
+_DROP_PAGE = 5000
+
 _LAST_EVENT_TIME_KEY = "last_event_time"
 
 
@@ -115,16 +118,20 @@ class Spool:
         dropped_rows = 0
         dropped_bytes = 0
         with self._conn:
-            candidates = self._conn.execute(
-                "SELECT id, payload_bytes FROM spool ORDER BY id ASC"
-            ).fetchall()
-            for row_id, size in candidates:
-                if total <= target:
+            # paged scan: the candidate list must not be materialised, a full
+            # spool can hold hundreds of thousands of rows
+            cursor = self._conn.execute("SELECT id, payload_bytes FROM spool ORDER BY id ASC")
+            while total > target:
+                page = cursor.fetchmany(_DROP_PAGE)
+                if not page:
                     break
-                self._conn.execute("DELETE FROM spool WHERE id = ?", (row_id,))
-                total -= size
-                dropped_bytes += size
-                dropped_rows += 1
+                for row_id, size in page:
+                    if total <= target:
+                        break
+                    self._conn.execute("DELETE FROM spool WHERE id = ?", (row_id,))
+                    total -= size
+                    dropped_bytes += size
+                    dropped_rows += 1
         if dropped_rows:
             LOGGER.warning(
                 "spool exceeded %d bytes: dropped %d oldest events (%d bytes). "
@@ -141,21 +148,39 @@ class Spool:
     def max_bytes(self) -> int:
         return self._max_bytes
 
-    def fetch(self, limit: int) -> list[SpoolRow]:
-        """Return up to ``limit`` oldest rows in insertion order."""
+    def iter_fetch(self, limit: int, chunk_size: int = 1000) -> Iterable[SpoolRow]:
+        """Stream up to ``limit`` oldest rows in insertion order.
+
+        Rows are pulled off the SQLite cursor in pages of ``chunk_size`` so
+        memory stays bounded by one page instead of the whole batch.
+        """
         cursor = self._conn.execute(
             "SELECT id, kind, event_time, payload FROM spool ORDER BY id ASC LIMIT ?",
             (limit,),
         )
-        return [
-            SpoolRow(id=row_id, kind=kind, event_time=event_time, payload=json.loads(payload))
-            for row_id, kind, event_time, payload in cursor
-        ]
+        while True:
+            page = cursor.fetchmany(chunk_size)
+            if not page:
+                return
+            for row_id, kind, event_time, payload in page:
+                yield SpoolRow(id=row_id, kind=kind, event_time=event_time, payload=json.loads(payload))
+
+    def fetch(self, limit: int) -> list[SpoolRow]:
+        """Return up to ``limit`` oldest rows in insertion order."""
+        return list(self.iter_fetch(limit))
 
     def drop(self, ids: Iterable[int]) -> None:
         """Delete rows that have been written to storage successfully."""
         with self._conn:
             self._conn.executemany("DELETE FROM spool WHERE id = ?", [(row_id,) for row_id in ids])
+
+    def stats(self) -> tuple[int, int]:
+        """(pending rows, pending bytes) in one query."""
+        cursor = self._conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(payload_bytes), 0) FROM spool"
+        )
+        count, total = cursor.fetchone()
+        return int(count), int(total)
 
     def pending(self) -> int:
         cursor = self._conn.execute("SELECT COUNT(*) FROM spool")

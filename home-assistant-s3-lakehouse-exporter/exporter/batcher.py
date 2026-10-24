@@ -1,7 +1,7 @@
 """Micro-batching and the background drainer.
 
-Flushes happen every ``flush_interval_seconds`` or every
-``capture.max_batch_rows`` rows, whichever comes first. Under spool pressure
+Flushes happen every ``flush_interval_seconds``, every ``max_batch_rows``
+rows, or every ``TARGET_OBJECT_BYTES`` of payload — whichever comes first. Under spool pressure
 the exporter **degrades instead of growing**:
 
 1. attribute capture drops to ``minimal`` (see
@@ -21,6 +21,8 @@ import logging
 import time
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any
+
+from exporter.writers.base import TARGET_OBJECT_BYTES
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from exporter.capture import AttributeFilter
@@ -116,6 +118,7 @@ class Drainer:
         pressure: Pressure | None = None,
         status: Any | None = None,
         flush_interval: float | None = None,
+        max_batch_bytes: int | None = None,
         now: Any = None,
     ) -> None:
         self.spool = spool
@@ -130,14 +133,19 @@ class Drainer:
         )
         self._now = now or time.monotonic
         self.max_batch_rows = options.capture.max_batch_rows
+        self.max_batch_bytes = max_batch_bytes or TARGET_OBJECT_BYTES
 
     async def run(self, stop_event: asyncio.Event) -> None:
         next_due = self._now()
         while not stop_event.is_set():
             self.pressure.update()
             now = self._now()
-            pending = self.spool.pending()
-            due = pending >= self.max_batch_rows or now >= next_due
+            pending_rows, pending_bytes = self.spool.stats()
+            due = (
+                pending_rows >= self.max_batch_rows
+                or pending_bytes >= self.max_batch_bytes
+                or now >= next_due
+            )
             if due:
                 written = await self.flush()
                 interval = self.pressure.flush_interval if written >= 0 else RETRY_SECONDS

@@ -135,6 +135,36 @@ def test_flush_writes_at_most_max_batch_rows(tmp_path) -> None:
     spool.close()
 
 
+def test_byte_trigger_flushes_before_row_count(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("exporter.batcher.IDLE_TICK", 0.02)
+    spool = _spool(tmp_path)
+    writer = FakeWriter()
+    options = make_options(capture={"max_batch_rows": 10_000, "flush_interval_seconds": 3600})
+    drainer = Drainer(spool, writer, options, flush_interval=3600.0, max_batch_bytes=2000)
+
+    def add_one(minute: int) -> None:
+        spool.add("state_changes", ts(2026, 10, 24, 12, minute % 60), {"pad": "x" * 100})
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        task = asyncio.create_task(drainer.run(stop))
+        await asyncio.sleep(0.15)  # let the initial immediate flush tick pass (empty)
+
+        for minute in range(5):  # ~750 bytes: below the byte target
+            add_one(minute)
+        await asyncio.sleep(0.15)
+        assert writer.batches == []  # neither rows nor bytes triggered a flush
+
+        minute = 5
+        while spool.total_bytes() < 2500:  # cross the byte target, still ~30 rows
+            add_one(minute)
+            minute += 1
+        await _run_until(lambda: len(writer.batches) >= 1 and spool.pending() == 0, task)
+
+    asyncio.run(scenario())
+    assert writer.batches  # flushed on bytes, far below the row trigger
+
+
 def test_pressure_ladder(tmp_path) -> None:
     spool = Spool(tmp_path / "spool.db", max_bytes=1000)
     attributes = AttributeFilter("all")
