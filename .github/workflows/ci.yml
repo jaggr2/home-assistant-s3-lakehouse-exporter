@@ -34,6 +34,47 @@ jobs:
         run: pytest
         working-directory: home-assistant-s3-lakehouse-exporter
 
+  # Runs the S3 integration suite against a SeaweedFS service container. The
+  # same suite is opt-in locally (pytest -m integration, see docker-compose.yml).
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      seaweedfs:
+        image: chrislusf/seaweedfs:latest
+        ports:
+          - "8333:8333"
+        env:
+          AWS_ACCESS_KEY_ID: ha-exporter
+          AWS_SECRET_ACCESS_KEY: ha-exporter-secret-change-me
+          S3_BUCKET: ha-lakehouse
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: home-assistant-s3-lakehouse-exporter/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r home-assistant-s3-lakehouse-exporter/requirements-dev.txt
+      - name: Wait for the S3 endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:8333; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::SeaweedFS S3 endpoint did not come up"
+          exit 1
+      - name: Integration tests
+        working-directory: home-assistant-s3-lakehouse-exporter
+        env:
+          HA_EXPORTER_TEST_S3_ENDPOINT: http://127.0.0.1:8333
+          HA_EXPORTER_TEST_S3_ACCESS_KEY: ha-exporter
+          HA_EXPORTER_TEST_S3_SECRET_KEY: ha-exporter-secret-change-me
+          HA_EXPORTER_TEST_S3_BUCKET: ha-lakehouse
+        run: pytest -m integration
+
   # PR-only image build (no push). The build args must carry a per-arch base
   # image, so each platform is built in its own matrix leg.
   docker:
@@ -71,7 +112,7 @@ jobs:
   # — and switch config.yaml's image: to the {arch} placeholder form.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: lint-test
+    needs: [lint-test, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read
