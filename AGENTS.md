@@ -174,10 +174,11 @@ CHANGELOG.md
 
 ## 11. Open decisions (ask the maintainer, then record here)
 
-- License (MIT or Apache-2.0 suggested for a public HA add-on).
-- Minimum supported HA core version (drives which WS registry commands are
-  safe to use).
-- Whether `attribute_allowlist` should also apply to `events.data`.
+- License: **MIT** (decided 2026-10-24).
+- Minimum supported HA core version: **2024.6+** (decided 2026-10-24).
+- Whether `attribute_allowlist` should also apply to `events.data`: **not in
+  v1** — the allowlist filters `state_changes.attributes` only, and `events.data`
+  is exported whole. Revisit if users ask.
 
 ## 12. Style
 
