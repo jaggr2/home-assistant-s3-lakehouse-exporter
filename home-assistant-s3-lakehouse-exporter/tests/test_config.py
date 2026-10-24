@@ -23,6 +23,7 @@ def test_defaults_applied() -> None:
     assert options.capture.flush_interval_seconds == 300
     assert options.capture.max_batch_rows == 20000
     assert options.format.table_prefix == "ha_"
+    assert options.format.database == "default"
     assert options.format.compression == "zstd"
     assert options.runtime.spool_max_mb == 256
     assert options.runtime.spool_max_bytes == 256 * 1024 * 1024
@@ -182,3 +183,13 @@ def test_load_options_from_file(tmp_path) -> None:
 def test_load_options_missing_file(tmp_path) -> None:
     with pytest.raises(ConfigError):
         load_options(tmp_path / "missing.json")
+
+
+def test_database_option() -> None:
+    options = parse_options({"s3": {"bucket": "b"}, "format": {"database": "lake_bronze"}})
+    assert options.format.database == "lake_bronze"
+
+
+def test_database_must_be_identifier() -> None:
+    with pytest.raises(ConfigError):
+        parse_options({"s3": {"bucket": "b"}, "format": {"database": "bad name"}})

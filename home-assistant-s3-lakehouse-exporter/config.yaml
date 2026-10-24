@@ -1,5 +1,5 @@
 name: Home Assistant S3 Lakehouse Exporter
-version: "0.1.0"
+version: "0.1.1"
 slug: home_assistant_s3_lakehouse_exporter
 description: Export Home Assistant history to S3-compatible storage as Apache Iceberg, Parquet, or JSONL
 url: https://github.com/jaggr2/home-assistant-s3-lakehouse-exporter
@@ -43,6 +43,7 @@ options:
     catalog: "glue"
     catalog_uri: ""
     warehouse: ""
+    database: "default"
     table_prefix: "ha_"
     compression: "zstd"
   runtime:
@@ -79,6 +80,7 @@ schema:
     catalog: list(glue|rest|nessie|hive|sql)?
     catalog_uri: str?
     warehouse: str?
+    database: str?
     table_prefix: str
     compression: list(zstd|snappy|gzip|none)?
   runtime:

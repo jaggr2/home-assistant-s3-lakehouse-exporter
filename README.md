@@ -120,6 +120,7 @@ whichever comes first.
 | `format.catalog` | enum (optional) | `"glue"` | Iceberg catalog implementation (`format.type: iceberg` only): `glue`, `rest`, `nessie`, `hive`, or `sql`. |
 | `format.catalog_uri` | string (optional) | `""` | Catalog endpoint URI. For `format.catalog: sql` this is a SQLAlchemy database URL. |
 | `format.warehouse` | string (optional) | `""` | Warehouse setting for the catalog (location/warehouse, depending on the catalog type). |
+| `format.database` | string | `"default"` | Catalog database/namespace for Iceberg tables (Glue database, Hive/Nessie namespace), e.g. `lake_bronze`. |
 | `format.table_prefix` | string | `"ha_"` | Prefix prepended to every table name (e.g. `ha_state_changes`). |
 | `format.compression` | enum (optional) | `"zstd"` | Compression codec for data files: `zstd`, `snappy`, `gzip`, `none`. |
 

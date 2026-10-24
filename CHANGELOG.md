@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-24
+
+### Added
+
+- `format.database`: target catalog database/namespace for Iceberg tables
+  (Glue database, Hive/Nessie namespace). Defaults to `default`, matching
+  previous behaviour; set it to write into a dedicated database such as
+  `lake_bronze`.
+
 ## [0.1.0] - 2026-10-24
 
 ### Added

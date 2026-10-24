@@ -108,7 +108,8 @@ class IcebergWriter(BatchWriter):
         from pyiceberg.catalog import load_catalog
 
         self._catalog = load_catalog("home_assistant", **catalog_properties(options))
-        self._catalog.create_namespace_if_not_exists(NAMESPACE)
+        self._namespace = options.format.database or NAMESPACE
+        self._catalog.create_namespace_if_not_exists(self._namespace)
         self._tables: dict[str, Any] = {}
         self._table_columns: dict[str, list[Column]] = {}
         self._lock = threading.Lock()
@@ -166,7 +167,7 @@ class IcebergWriter(BatchWriter):
     def _table_for(self, kind: str, columns: Sequence[Column]) -> Any:
         if kind not in self._tables:
             name = self.table_name(kind)
-            identifier = (NAMESPACE, name)
+            identifier = (self._namespace, name)
             self._tables[kind] = self._catalog.create_table_if_not_exists(
                 identifier,
                 iceberg_schema(columns),

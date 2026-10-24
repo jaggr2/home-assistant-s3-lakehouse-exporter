@@ -12,11 +12,11 @@ Merge the README's S3 policy (`s3:PutObject` + `s3:AbortMultipartUpload` on
 `BUCKET/PREFIX/*`, prefix-conditioned `s3:ListBucket`) with Glue access scoped
 to one database.
 
-**Namespace**: in v1 the Iceberg namespace is fixed to `default`
-(`exporter/writers/iceberg.py`), which maps to the Glue database `default`.
-Tables are `default.<table_prefix><kind>`, e.g. `default.ha_state_changes`. If
-you want a dedicated Glue database, note that the exporter still writes to
-`default` until a configurable namespace ships — scope the policy accordingly.
+**Namespace**: the Iceberg namespace defaults to `default` and maps to the
+Glue database `default`. Set `format.database` (e.g. `lake_bronze`) to write
+into a dedicated Glue database/namespace instead — tables are then
+`<format.database>.<table_prefix><kind>`, e.g. `lake_bronze.ha_state_changes`.
+Scope the IAM policy to the database you choose.
 
 ```json
 {

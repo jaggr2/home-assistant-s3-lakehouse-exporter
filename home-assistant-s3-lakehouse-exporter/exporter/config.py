@@ -93,6 +93,7 @@ class FormatOptions:
     catalog: str | None
     catalog_uri: str | None
     warehouse: str | None
+    database: str
     table_prefix: str
     compression: str
 
@@ -299,11 +300,16 @@ def _parse_format(raw: dict[str, Any]) -> FormatOptions:
     if not set(table_prefix) <= _TABLE_NAME_CHARS:
         raise ConfigError("format.table_prefix may only contain letters, digits and underscores")
 
+    database = _opt_str(section, "database") or "default"
+    if not set(database) <= _TABLE_NAME_CHARS:
+        raise ConfigError("format.database may only contain letters, digits and underscores")
+
     return FormatOptions(
         type=fmt,
         catalog=catalog if fmt == "iceberg" else None,
         catalog_uri=catalog_uri,
         warehouse=warehouse,
+        database=database,
         table_prefix=table_prefix,
         compression=compression,
     )
