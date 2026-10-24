@@ -392,6 +392,12 @@ pytest -m integration
 `scripts/profile_ingest.py` measures ingest memory and throughput; results
 and methodology are in [`docs/performance.md`](docs/performance.md).
 
+Maintainer runbooks: [`docs/RELEASE.md`](docs/RELEASE.md) (cutting and
+verifying a release), [`docs/dogfooding.md`](docs/dogfooding.md) (validating
+against a real Home Assistant), and
+[`docs/glue-athena.md`](docs/glue-athena.md) (verifying the Iceberg path
+against AWS Glue + Athena).
+
 ## Minimum supported version
 
 Home Assistant core **2024.6+**, on a Supervisor-based installation.
