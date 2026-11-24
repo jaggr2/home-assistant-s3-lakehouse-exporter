@@ -246,7 +246,7 @@ def _parse_capture(raw: dict[str, Any]) -> CaptureOptions:
     if backfill_days < 0:
         raise ConfigError("capture.backfill_days must be >= 0")
 
-    flush_interval = _opt_int(section, "flush_interval_seconds", 300)
+    flush_interval = _opt_int(section, "flush_interval_seconds", 3600)
     if flush_interval < MIN_FLUSH_INTERVAL_SECONDS:
         LOGGER.warning(
             "capture.flush_interval_seconds %d is below the minimum; using %d",

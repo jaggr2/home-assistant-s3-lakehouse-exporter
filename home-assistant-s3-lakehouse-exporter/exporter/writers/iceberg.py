@@ -100,6 +100,19 @@ def partition_spec_for(kind: str, columns: Sequence[Column]):
     return PartitionSpec()
 
 
+#: Generic Iceberg hygiene applied to tables this writer creates (ignored by
+#: engines that do not know the keys, so safe for every catalog backend).
+#: Micro-batch writers commit a new metadata.json per flush; without
+#: delete-after-commit they pile up unboundedly (10 GB seen in the wild after
+#: a few months of 5-minute commits). Cap the tracked history and delete the
+#: rest right after each commit. Note the storage credentials need
+#: delete/overwrite permission on the table location for this to take effect.
+TABLE_PROPERTIES = {
+    "write.metadata.delete-after-commit.enabled": "true",
+    "write.metadata.previous-versions-max": "20",
+}
+
+
 class IcebergWriter(BatchWriter):
     format_type = "iceberg"
 
@@ -185,6 +198,7 @@ class IcebergWriter(BatchWriter):
                 identifier,
                 iceberg_schema(columns),
                 partition_spec=partition_spec_for(kind, columns),
+                properties=TABLE_PROPERTIES,
             )
         table = self._tables[kind]
         self._ensure_columns(table, columns)

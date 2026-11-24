@@ -20,7 +20,7 @@ def test_defaults_applied() -> None:
     assert options.capture.events == ("state_changed",)
     assert options.capture.registries is True
     assert options.capture.backfill_days == 30
-    assert options.capture.flush_interval_seconds == 300
+    assert options.capture.flush_interval_seconds == 3600
     assert options.capture.max_batch_rows == 20000
     assert options.format.table_prefix == "ha_"
     assert options.format.database == "default"

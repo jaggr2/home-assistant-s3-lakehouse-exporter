@@ -58,6 +58,39 @@ parquet batch.
   lengthened, at 95 % the oldest rows are dropped with a loud warning —
   memory and disk stay capped in every case.
 
+## S3 request cost
+
+On backends that price requests (S3, R2, Garage), **cost is proportional to
+commits, not to bytes** — rows are small and cheap to store, but every flush
+is one Iceberg commit and each commit writes several objects (one data file
+plus manifest, manifest-list and metadata.json). Measurements from a real
+deployment (8.4M rows over 41 days at a ~10-minute cadence):
+
+| | per commit | observed total |
+|---|---|---|
+| commits | 1 | 5,650 (41 days) |
+| object writes | ~4 | ~22,600 |
+| request cost | ~3 object writes billed as multipart | PutObject + multipart = ~70% of the S3 bill |
+
+Two things multiply the request count:
+
+- **Cadence** — `flush_interval_seconds` is the commit cadence. One flush per
+  hour is ~6x cheaper than one per ten minutes, ~12x cheaper than the old
+  five-minute default; `max_batch_rows` still bounds bursts.
+- **Small objects via multipart** — many S3 clients write every object as a
+  one-part multipart upload (Initiate + UploadPart + Complete = 3 billed
+  requests). Larger batches amortise this too.
+
+Operational countermeasures beyond batching:
+
+- Tables are created with `write.metadata.delete-after-commit.enabled` so
+  metadata files never pile up between maintenance runs (needs
+  `s3:DeleteObject`, see the IAM section in the README).
+- Schedule warehouse-side table maintenance (e.g. Athena `OPTIMIZE` +
+  `VACUUM`, or Spark `rewrite_data_files` + `expire_snapshots`) to compact
+  small data files and expire snapshots. Micro-batch writers produce one data
+  file per commit; without compaction every query pays for all of them.
+
 ## Reproduce
 
 ```sh

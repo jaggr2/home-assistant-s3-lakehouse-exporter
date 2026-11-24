@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-24
+
+### Changed
+
+- **Default `capture.flush_interval_seconds` is now `3600` (was `300`).**
+  The interval is the Iceberg commit cadence, and on per-request-priced S3
+  backends each commit costs several billed requests (data file + manifest +
+  manifest-list + metadata). Hourly batching cut a real deployment's request
+  volume about 6x. Set `flush_interval_seconds: 300` to keep five-minute
+  freshness at proportionally higher request cost.
+
+### Added
+
+- Iceberg tables are created with
+  `write.metadata.delete-after-commit.enabled=true` and
+  `write.metadata.previous-versions-max=20`, so metadata files no longer pile
+  up between maintenance runs (a 10 GB metadata directory was observed in the
+  wild after months of five-minute commits). The storage credentials need
+  delete permission (`s3:DeleteObject`) for this to take effect - the
+  least-privilege policies in the README now include it.
+- `docs/performance.md` documents S3 request cost versus flush cadence and
+  recommends warehouse-side table maintenance (compaction + snapshot expiry).
+
 ## [0.1.5] - 2026-10-24
 
 ### Fixed

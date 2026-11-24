@@ -106,11 +106,16 @@ error messages, or the health endpoint.
 | `capture.attributes` | enum | `"all"` | Attribute capture mode. `all`: write the full attribute set. `minimal`: write only the keys listed in `attribute_allowlist` (none if the allowlist is empty). `allowlist`: same key filtering as `minimal`, but a non-empty `attribute_allowlist` is required. |
 | `capture.attribute_allowlist` | list of strings | `[]` | Attribute keys kept when `attributes` is `minimal` or `allowlist`. |
 | `capture.backfill_days` | int | `30` | How far back to fetch history at startup, in days. `0` disables the startup import (gap repair after stream outages still runs). |
-| `capture.flush_interval_seconds` | int | `300` | Maximum time a batch is buffered before it is written to storage. |
+| `capture.flush_interval_seconds` | int | `3600` | Maximum time a batch is buffered before it is written to storage. |
 | `capture.max_batch_rows` | int | `20000` | Maximum rows per write; a flush is triggered as soon as this many rows are buffered. |
 
 Flushes happen every `flush_interval_seconds` **or** every `max_batch_rows`,
-whichever comes first.
+whichever comes first. The interval is also the **commit cadence**, and on
+per-request-priced S3 backends request cost is proportional to commits (each
+Iceberg commit writes a data file plus ~3 metadata objects). The default of
+one hour keeps that cheap; set `flush_interval_seconds: 300` for five-minute
+freshness at roughly 12x the request cost — see
+[docs/performance.md](docs/performance.md#s3-request-cost).
 
 ### `format` — output format and catalog
 
@@ -140,7 +145,10 @@ bucket. That is the lowest-barrier way to get started.
 ### AWS IAM
 
 The exporter only ever **writes** objects and (for some operations) **lists**
-its own prefix. A least-privilege policy looks like this — replace `BUCKET`
+its own prefix, and **deletes** superseded Iceberg metadata files it wrote
+itself (the tables are created with
+`write.metadata.delete-after-commit.enabled`). A least-privilege policy looks
+like this — replace `BUCKET`
 and `PREFIX` (the latter matching `s3.prefix`, default `home-assistant`):
 
 ```json
@@ -152,6 +160,7 @@ and `PREFIX` (the latter matching `s3.prefix`, default `home-assistant`):
       "Effect": "Allow",
       "Action": [
         "s3:PutObject",
+        "s3:DeleteObject",
         "s3:AbortMultipartUpload"
       ],
       "Resource": "arn:aws:s3:::BUCKET/PREFIX/*"
@@ -202,7 +211,7 @@ cat > ha-exporter-policy.json <<'EOF'
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:AbortMultipartUpload"],
+      "Action": ["s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload"],
       "Resource": "arn:aws:s3:::ha-lakehouse/home-assistant/*"
     },
     {
